@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>SCTEC - Painel de Controle</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        button.delete { background-color: #ff4444; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>SCTEC - Agendamentos</h1>
+    
+    <div style="background: #f0f0f0; padding: 10px; margin-bottom: 20px;">
+        <strong>Relógio do Sistema (Sincronizado):</strong> <span id="clock">Calculando...</span>
+        <button onclick="sincronizar()">Ressincronizar</button>
+    </div>
+
+    <h3>Novo Agendamento (Teste)</h3>
+    <button onclick="criarAgendamentoTeste()">Criar Agendamento Aleatório</button>
+
+    <h3>Agenda Atual</h3>
+    <div id="lista-agendamentos">Carregando...</div>
+
+    <script>
+        let serverOffset = 0;
+
+        // 1. Sincronização de Tempo (Algoritmo de Cristian)
+        async function sincronizar() {
+            let t0 = Date.now();
+            let response = await fetch('/time');
+            let data = await response.json();
+            let t1 = Date.now();
+            let serverTime = new Date(data.server_time_utc).getTime();
+            let rtt = t1 - t0;
+            serverOffset = (serverTime + (rtt / 2)) - t1;
+        }
+
+        setInterval(() => {
+            let now = Date.now() + serverOffset;
+            document.getElementById('clock').innerText = new Date(now).toISOString();
+        }, 1000);
+
+        // 2. Criar Agendamento para ter o que cancelar
+        async function criarAgendamentoTeste() {
+            const idRandom = Math.floor(Math.random() * 10000);
+            const dados = {
+                cientista: "Cientista Teste",
+                recurso: `Telescopio-${idRandom}`, // Recurso único para evitar conflito no teste simples
+                data_horario: new Date().toISOString()
+            };
+
+            await fetch('/agendamentos', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(dados)
+            });
+            carregarLista(); // Atualiza a tela
+        }
+
+        // 3. Listar e Cancelar usando HATEOAS
+        async function carregarLista() {
+            const div = document.getElementById('lista-agendamentos');
+            div.innerHTML = "Atualizando...";
+            
+            const res = await fetch('/agendamentos');
+            const lista = await res.json();
+            
+            div.innerHTML = "";
+            
+            if (lista.length === 0) div.innerHTML = "Nenhum agendamento encontrado.";
+
+            lista.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'card';
+                
+                // Procura o link HATEOAS correto para deletar
+                const linkDeletar = item.links.find(l => l.rel === "delete");
+                
+                el.innerHTML = `
+                    <strong>ID:</strong> ${item.id} <br>
+                    <strong>Recurso:</strong> ${item.recurso} <br>
+                    <strong>Cientista:</strong> ${item.cientista} <br>
+                `;
+
+                if (linkDeletar) {
+                    const btn = document.createElement('button');
+                    btn.className = 'delete';
+                    btn.innerText = "Cancelar Agendamento";
+                    btn.onclick = () => deletarItem(linkDeletar.href);
+                    el.appendChild(btn);
+                }
+
+                div.appendChild(el);
+            });
+        }
+
+        async function deletarItem(url) {
+            if(!confirm("Tem certeza que deseja cancelar?")) return;
+            
+            const res = await fetch(url, { method: 'DELETE' });
+            if (res.ok) {
+                alert("Agendamento cancelado!");
+                carregarLista();
+            } else {
+                alert("Erro ao cancelar.");
+            }
+        }
+
+        // Inicia tudo
+        sincronizar();
+        carregarLista();
+    </script>
+</body>
+</html>

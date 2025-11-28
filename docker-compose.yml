@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  servico-coordenador:
+    build: ./servico-coordenador
+    ports:
+      - "3000:3000"
+    container_name: coordenador
+
+  servico-agendamento:
+    build: ./servico-agendamento
+    ports:
+      - "5000:5000"
+    environment:
+      # Aponta para o nome do serviço definido acima
+      - COORDINATOR_URL=http://servico-coordenador:3000
+    depends_on:
+      - servico-coordenador
+    container_name: cerebro
